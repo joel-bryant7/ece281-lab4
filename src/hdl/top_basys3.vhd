@@ -97,7 +97,8 @@ architecture top_basys3_arch of top_basys3 is
                i_reset   : in  STD_LOGIC;
                i_stop    : in  STD_LOGIC;
                i_up_down : in  STD_LOGIC;
-               o_floor   : out STD_LOGIC_VECTOR (3 downto 0)           
+               o_floor0  : out STD_LOGIC_VECTOR (3 downto 0);
+               o_floor1  : out STD_LOGIC_VECTOR (3 downto 0)               
              );
     end component elevator_controller_fsm;
      
@@ -117,10 +118,24 @@ architecture top_basys3_arch of top_basys3 is
                 );
             end component clock_divider; 
             
+     component TDM4 is
+        generic ( constant k_WIDTH : natural  := 4); -- bits in input and output
+         Port ( i_clk        : in  STD_LOGIC;
+                i_reset        : in  STD_LOGIC; -- asynchronous
+                i_D1         : in  STD_LOGIC_VECTOR (k_WIDTH - 1 downto 0);
+                i_D0         : in  STD_LOGIC_VECTOR (k_WIDTH - 1 downto 0);
+                o_data        : out STD_LOGIC_VECTOR (k_WIDTH - 1 downto 0);
+                o_sel        : out STD_LOGIC_VECTOR (3 downto 0)    -- selected data line (one-cold)
+         );
+         end component TDM4;
+            
      signal w_clk : std_logic;
-     signal w_floor : std_logic_vector (3 downto 0);
+     signal w_floor0 : std_logic_vector (3 downto 0);
+     signal w_floor1 : std_logic_vector (3 downto 0);
      signal w_Ereset : std_logic;
      signal w_Creset : std_logic;
+     signal w_clk2 : std_logic;
+     signal w_data : std_logic_vector (3 downto 0);
      
 begin
 	-- PORT MAPS ----------------------------------------
@@ -130,12 +145,13 @@ begin
             i_reset   => w_Ereset,
             i_up_down => sw(1),
 	        i_stop    => sw(0),
-	        o_floor   => w_floor
+	        o_floor0   => w_floor0,
+	        o_floor1   => w_floor1
 	    );
 	
 	sevenSegDecoder_inst : sevenSegDecoder
 	   port map(
-	       i_D => w_floor,
+	       i_D => w_data,
 	       o_S => seg
 	  );
 	  
@@ -145,6 +161,24 @@ begin
 	       i_reset => w_Creset,
 	       i_clk => clk,
 	       o_clk => w_clk 
+	   );
+	clock_divider_inst2 : clock_divider
+       generic map ( k_DIV => 39062 ) -- 2 Hz clock from 100 MH
+       port map(
+          i_reset => w_Creset,
+          i_clk => clk,
+          o_clk => w_clk2 
+          );
+	   
+    TDM4_inst : TDM4
+	   generic map ( k_WIDTH => 4)
+	   port map(
+	       i_clk => w_clk2,
+	       i_reset => btnU,
+	       i_D1 => w_floor1,
+	       i_D0 => w_floor0,
+	       o_data => w_data,
+	       o_sel => an
 	   );
 	
 	-- CONCURRENT STATEMENTS ----------------------------
@@ -160,9 +194,9 @@ begin
 	
 	-- wire up active-low 7SD anodes (an) as required
 	-- Tie any unused anodes to power ('1') to keep them off
-	an(3) <= '1';
-	an(2) <= '0';
-	an(1) <= '1';
-	an(0) <= '1';
+	--an(3) <= '0';
+	--an(2) <= '0';
+	--an(1) <= '1';
+	--an(0) <= '1';
 	
 end top_basys3_arch;
